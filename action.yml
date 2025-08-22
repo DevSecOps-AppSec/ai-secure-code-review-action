@@ -1,0 +1,51 @@
+name: "AI Secure Code Review"
+description: "Run a 2-minute AppSec code review on changed PR hunks using the ChatGPT API (or compatible provider)."
+author: "DevSecOps-AppSec"
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  openai_api_key:
+    description: "API key for OpenAI or compatible provider"
+    required: true
+  model:
+    description: "Model name"
+    required: false
+    default: "gpt-4o-mini"
+  max_tokens:
+    description: "Max output tokens"
+    required: false
+    default: "1200"
+  time_budget_seconds:
+    description: "Time budget for analysis"
+    required: false
+    default: "100"
+  max_files:
+    description: "Max changed files to review"
+    required: false
+    default: "30"
+  max_lines:
+    description: "Max changed lines across files"
+    required: false
+    default: "1200"
+  line_trim_per_file:
+    description: "Per-file hunk line cap"
+    required: false
+    default: "300"
+  risky_exts:
+    description: "Comma-separated file extensions"
+    required: false
+    default: "js,ts,tsx,jsx,py,go,rb,php,java,kt,cs,rs,swift,c,cc,cpp,h,sql,sh,ps1,yml,yaml,json,html,htm,css,scss,vue,mdx"
+  openai_base_url:
+    description: "Optional: alternate base URL (e.g., OpenRouter)"
+    required: false
+    default: ""
+  openai_org:
+    description: "Optional: OpenAI org id header"
+    required: false
+    default: ""
+
+runs:
+  using: "node20"
+  main: "review_pr.js"
