@@ -1,5 +1,5 @@
 name: "AI Secure Code Review"
-description: "Run a 2-minute AppSec code review on changed PR hunks using the ChatGPT API (or compatible provider)."
+description: "Run a 2-minute AppSec code review on changed PR hunks using a ChatGPT-compatible API."
 author: "DevSecOps-AppSec"
 branding:
   icon: "shield"
@@ -47,5 +47,32 @@ inputs:
     default: ""
 
 runs:
-  using: "node20"
-  main: "review_pr.js"
+  using: "composite"
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+
+    - name: Install deps
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: npm ci || npm i
+
+    - name: Run secure review
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      env:
+        # GitHub & model env
+        GITHUB_TOKEN: ${{ github.token }}
+        OPENAI_API_KEY: ${{ inputs.openai_api_key }}
+        OPENAI_BASE_URL: ${{ inputs.openai_base_url }}
+        OPENAI_ORG: ${{ inputs.openai_org }}
+        MODEL: ${{ inputs.model }}
+        MAX_TOKENS: ${{ inputs.max_tokens }}
+        TIME_BUDGET_SECONDS: ${{ inputs.time_budget_seconds }}
+        MAX_FILES: ${{ inputs.max_files }}
+        MAX_LINES: ${{ inputs.max_lines }}
+        LINE_TRIM_PER_FILE: ${{ inputs.line_trim_per_file }}
+        RISKY_EXTS: ${{ inputs.risky_exts }}
+      run: node review_pr.js
