@@ -40,7 +40,7 @@ inputs:
   openai_base_url:
     description: "Optional: alternate base URL (e.g., OpenRouter)"
     required: false
-    default: ""
+    default: "https://api.openai.com/v1"
   openai_org:
     description: "Optional: OpenAI org id header"
     required: false
