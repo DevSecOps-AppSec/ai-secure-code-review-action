@@ -17,6 +17,11 @@ Runs in under 2 minutes and posts a concise, actionable comment back to the PR.
 
 ### Usage
 ```yaml
+name: Secure Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
 jobs:
   review:
     runs-on: ubuntu-latest
@@ -27,3 +32,8 @@ jobs:
       - uses: DevSecOps-AppSec/ai-secure-code-review-action@v1
         with:
           openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-4o-mini
+          time_budget_seconds: 90
+          max_files: 20
+          max_lines: 1000
+```
