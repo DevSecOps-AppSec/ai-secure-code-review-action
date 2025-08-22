@@ -1,5 +1,5 @@
 name: "AI Secure Code Review"
-description: "Run a 2-minute AppSec code review on changed PR hunks using a ChatGPT-compatible API."
+description: "Automated AppSec code review on PR changes using a ChatGPT-compatible API"
 author: "DevSecOps-AppSec"
 branding:
   icon: "shield"
