@@ -62,6 +62,7 @@ runs:
 
     - name: Show GitLeaks findings (optional)
       if: always()
+      shell: bash
       run: |
         test -f "${{ github.workspace }}/gitleaks-report.json" && head -c 20000 "${{ github.workspace }}/gitleaks-report.json" || echo "No findings"
 
