@@ -1,10 +1,18 @@
+// review_pr.js
+// -----------------------------------------
+// Secure Code Review Action with GitLeaks integration
+// -----------------------------------------
+
 import core from "@actions/core";
 import github from "@actions/github";
 import fetch from "node-fetch";
 import { fileURLToPath } from "url";
 import path from "path";
-import fs from "fs/promises";
+import fs from "fs";
 
+// --------------------------------------------------
+// Globals / Config
+// --------------------------------------------------
 const {
   GITHUB_TOKEN,
   OPENAI_API_KEY,
@@ -15,19 +23,15 @@ const {
   MAX_LINES = "1200",
   LINE_TRIM_PER_FILE = "300",
   RISKY_EXTS = "js,ts,tsx,jsx,py,go,rb,php,java,kt,cs,rs,swift,c,cc,cpp,h,sql,sh,ps1,yml,yaml,json,html,htm,css,scss,vue,mdx",
-  OPENAI_BASE_URL = "https://api.openai.com/v1",
+  OPENAI_BASE_URL,
   OPENAI_ORG = ""
 } = process.env;
 
 const riskySet = new Set(RISKY_EXTS.split(",").map(s => s.trim().toLowerCase()));
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const started = Date.now();
 const deadline = started + Number(TIME_BUDGET_SECONDS) * 1000;
-
-const abortIfTimeUp = () => { if (Date.now() > deadline) throw new Error("TIME_BUDGET_EXCEEDED"); };
 
 const octokit = github.getOctokit(GITHUB_TOKEN);
 const { context } = github;
@@ -35,14 +39,52 @@ const owner = context.repo.owner;
 const repo = context.repo.repo;
 const COMMENT_TAG = "<!-- secure-code-review-bot -->";
 
+function abortIfTimeUp() {
+  if (Date.now() > deadline) throw new Error("TIME_BUDGET_EXCEEDED");
+}
+
+// --------------------------------------------------
+// GitLeaks helpers (minimal add-on)
+// --------------------------------------------------
+function loadGitLeaksFindings() {
+  try {
+    const p = "gitleaks-report.json";
+    if (!fs.existsSync(p)) return [];
+    const data = JSON.parse(fs.readFileSync(p, "utf8"));
+    return Array.isArray(data) ? data : (Array.isArray(data?.findings) ? data.findings : []);
+  } catch {
+    return [];
+  }
+}
+
+function summarizeGitLeaks(findings, limit = 10) {
+  if (!findings.length) return "";
+  const lines = findings.slice(0, limit).map(f => {
+    const file = f.File || f.file || f.Path || "unknown";
+    const rule = f.RuleID || f.ruleID || f.Rule || "rule";
+    const line = f.StartLine || f.startLine || f.Line || "?";
+    return `- \`${file}\` line ${line}: **${rule}**`;
+  });
+  const more = findings.length > limit ? `\n…and ${findings.length - limit} more.` : "";
+  return `### 🔑 GitLeaks Findings\n${lines.join("\n")}${more}`;
+}
+
+// --------------------------------------------------
+// Existing helpers (unchanged except safe tweaks)
+// --------------------------------------------------
 async function getPRNumber() {
   const n = context.payload.pull_request?.number;
   if (!n) throw new Error("This action must run on pull_request events.");
   return n;
 }
 
-function isBinaryOrLarge(f) { return f.status === "removed" || f.patch == null; }
-function hasRiskyExt(filename) { const ext = filename.toLowerCase().split(".").pop(); return riskySet.has(ext); }
+function isBinaryOrLarge(f) {
+  return f.status === "removed" || f.patch == null;
+}
+function hasRiskyExt(filename) {
+  const ext = filename.toLowerCase().split(".").pop();
+  return riskySet.has(ext);
+}
 function trimPatchLines(patch, limit) {
   const lines = patch.split("\n");
   if (lines.length <= limit) return patch;
@@ -83,21 +125,25 @@ async function listChangedFiles(prNumber, capFiles, capLines, perFileCap) {
 
 async function loadPrompt() {
   const promptPath = path.join(__dirname, "prompt.txt");
-  return fs.readFile(promptPath, "utf8");
+  return fs.readFileSync(promptPath, "utf8");
 }
 
 function buildUserMessage(files) {
-  let body = "Unified diffs (changed hunks only). Each block begins with '=== FILE ==='.\n";
+  let body = ">>> BEGIN_PATCHES\n";
   for (const f of files) {
     body += `\n=== FILE: ${f.filename} (${f.status}, +${f.additions}/-${f.deletions}) ===\n`;
-    body += f.patch + "\n";
+    body += "```diff\n" + (f.patch || "") + "\n```\n";
   }
+  body += "\n<<< END_PATCHES";
   return body;
 }
 
 async function callOpenAI(systemPrompt, userContent) {
   abortIfTimeUp();
-  const resp = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
+  const base = (OPENAI_BASE_URL && OPENAI_BASE_URL.trim())
+    ? OPENAI_BASE_URL.trim().replace(/\/+$/, "")
+    : "https://api.openai.com/v1";
+  const resp = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${OPENAI_API_KEY}`,
@@ -130,15 +176,29 @@ async function upsertPRComment(prNumber, content) {
   else await octokit.rest.issues.createComment({ owner, repo, issue_number: prNumber, body });
 }
 
+// --------------------------------------------------
+// Main run()
+// --------------------------------------------------
 async function run() {
   try {
     const prNumber = await getPRNumber();
-    const { files, totalLines } = await listChangedFiles(prNumber, Number(MAX_FILES), Number(MAX_LINES), Number(LINE_TRIM_PER_FILE));
-    if (files.length === 0) { await upsertPRComment(prNumber, "No eligible code changes."); return; }
+    const { files } = await listChangedFiles(prNumber, Number(MAX_FILES), Number(MAX_LINES), Number(LINE_TRIM_PER_FILE));
+
+    if (files.length === 0) {
+      await upsertPRComment(prNumber, "No eligible code changes.");
+      return;
+    }
+
     const systemPrompt = await loadPrompt();
-    const userMessage = buildUserMessage(files);
+    let userMessage = buildUserMessage(files);
+
     const analysis = await callOpenAI(systemPrompt, userMessage);
-    await upsertPRComment(prNumber, analysis || "No output from model.");
+
+    // 🔑 GitLeaks integration (minimal touch)
+    const gitleaks = loadGitLeaksFindings();
+    const extras = summarizeGitLeaks(gitleaks);
+
+    await upsertPRComment(prNumber, [analysis || "No output from model.", extras].filter(Boolean).join("\n\n"));
   } catch (err) {
     const prNumber = context.payload.pull_request?.number;
     if (String(err).includes("OPENAI_INSUFFICIENT_QUOTA") && prNumber) {
@@ -149,4 +209,5 @@ async function run() {
     core.setFailed(String(err));
   }
 }
+
 run();
