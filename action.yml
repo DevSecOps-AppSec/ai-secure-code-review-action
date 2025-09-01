@@ -49,37 +49,54 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Ensure the PR repo is present for diffs *and* for git-based tools
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
     - name: Setup Node
       uses: actions/setup-node@v4
       with:
         node-version: 20
 
-    # Install GitLeaks tool (v2 action installs the binary)
-    - name: Setup GitLeaks
-      uses: gitleaks/gitleaks-action@v2
+    # ---- Install GitLeaks (no auto-scan) ----
+    - name: Install GitLeaks
+      shell: bash
       env:
-        GITHUB_TOKEN: ${{ github.token }}
-      with:
-        version: latest
+        # Pin to a known-good version; bump as needed
+        GITLEAKS_VERSION: "8.24.3"
+      run: |
+        set -euo pipefail
+        uname -a
+        mkdir -p /tmp/gitleaks
+        curl -sSL -o /tmp/gitleaks.tar.gz \
+          "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+        tar -xzf /tmp/gitleaks.tar.gz -C /tmp/gitleaks
+        sudo mv /tmp/gitleaks/gitleaks /usr/local/bin/gitleaks
+        gitleaks version
 
-    # Run GitLeaks with custom args; always create/keep a JSON report
+    # ---- Run GitLeaks and always produce a JSON report ----
     - name: Detect secrets with GitLeaks
       shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       run: |
+        set -euo pipefail
+        # Scan the working tree only (fast, PR-friendly). Remove --no-git if you want history.
         gitleaks detect --no-git --source "${{ github.workspace }}" \
           --report-format json \
           --report-path "${{ github.workspace }}/gitleaks-report.json" || true
+        # Guarantee the file exists so downstream steps don't fail
+        test -f "${{ github.workspace }}/gitleaks-report.json" || echo "[]" > "${{ github.workspace }}/gitleaks-report.json"
 
     - name: Show GitLeaks findings (optional)
       if: always()
       shell: bash
       run: |
-        if [ -f "${{ github.workspace }}/gitleaks-report.json" ]; then
-          head -c 20000 "${{ github.workspace }}/gitleaks-report.json"
-        else
-          echo "No findings"
-        fi
+        head -c 20000 "${{ github.workspace }}/gitleaks-report.json" || true
 
+    # ---- Install action deps & run the reviewer ----
     - name: Install deps
       shell: bash
       working-directory: ${{ github.action_path }}
