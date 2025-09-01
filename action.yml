@@ -49,7 +49,6 @@ inputs:
 runs:
   using: "composite"
   steps:
-    # Ensure the PR repo is present for diffs *and* for git-based tools
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
@@ -60,34 +59,51 @@ runs:
       with:
         node-version: 20
 
-    # ---- Install GitLeaks (no auto-scan) ----
+    # ---- Install GitLeaks manually ----
     - name: Install GitLeaks
       shell: bash
       env:
-        # Pin to a known-good version; bump as needed
         GITLEAKS_VERSION: "8.24.3"
       run: |
         set -euo pipefail
-        uname -a
-        mkdir -p /tmp/gitleaks
         curl -sSL -o /tmp/gitleaks.tar.gz \
           "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-        tar -xzf /tmp/gitleaks.tar.gz -C /tmp/gitleaks
-        sudo mv /tmp/gitleaks/gitleaks /usr/local/bin/gitleaks
+        tar -xzf /tmp/gitleaks.tar.gz -C /tmp
+        sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
         gitleaks version
 
-    # ---- Run GitLeaks and always produce a JSON report ----
+    # ---- Run GitLeaks on the PR commit range ----
     - name: Detect secrets with GitLeaks
+      if: ${{ github.event_name == 'pull_request' }}
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        # Scan the working tree only (fast, PR-friendly). Remove --no-git if you want history.
-        gitleaks detect --no-git --source "${{ github.workspace }}" \
+        BASE_SHA=$(jq -r '.pull_request.base.sha' "$GITHUB_EVENT_PATH")
+        HEAD_SHA=$(jq -r '.pull_request.head.sha' "$GITHUB_EVENT_PATH")
+        gitleaks detect \
+          --redact \
+          --source "${{ github.workspace }}" \
+          --log-opts="--no-merges --first-parent ${BASE_SHA}..${HEAD_SHA}" \
           --report-format json \
           --report-path "${{ github.workspace }}/gitleaks-report.json" || true
-        # Guarantee the file exists so downstream steps don't fail
+        test -f "${{ github.workspace }}/gitleaks-report.json" || echo "[]" > "${{ github.workspace }}/gitleaks-report.json"
+
+    # ---- Fallback for non-PR events ----
+    - name: Detect secrets with GitLeaks (working tree)
+      if: ${{ github.event_name != 'pull_request' }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        gitleaks detect \
+          --redact \
+          --no-git \
+          --source "${{ github.workspace }}" \
+          --report-format json \
+          --report-path "${{ github.workspace }}/gitleaks-report.json" || true
         test -f "${{ github.workspace }}/gitleaks-report.json" || echo "[]" > "${{ github.workspace }}/gitleaks-report.json"
 
     - name: Show GitLeaks findings (optional)
@@ -96,7 +112,6 @@ runs:
       run: |
         head -c 20000 "${{ github.workspace }}/gitleaks-report.json" || true
 
-    # ---- Install action deps & run the reviewer ----
     - name: Install deps
       shell: bash
       working-directory: ${{ github.action_path }}
