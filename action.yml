@@ -54,17 +54,31 @@ runs:
       with:
         node-version: 20
 
-    - name: Run GitLeaks secret scan
+    # Install GitLeaks tool (v2 action installs the binary)
+    - name: Setup GitLeaks
       uses: gitleaks/gitleaks-action@v2
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
       with:
-        args: detect --no-git --source ${{ github.workspace }} --report-format json --report-path ${{ github.workspace }}/gitleaks-report.json
-      continue-on-error: true
+        version: latest
+
+    # Run GitLeaks with custom args; always create/keep a JSON report
+    - name: Detect secrets with GitLeaks
+      shell: bash
+      run: |
+        gitleaks detect --no-git --source "${{ github.workspace }}" \
+          --report-format json \
+          --report-path "${{ github.workspace }}/gitleaks-report.json" || true
 
     - name: Show GitLeaks findings (optional)
       if: always()
       shell: bash
       run: |
-        test -f "${{ github.workspace }}/gitleaks-report.json" && head -c 20000 "${{ github.workspace }}/gitleaks-report.json" || echo "No findings"
+        if [ -f "${{ github.workspace }}/gitleaks-report.json" ]; then
+          head -c 20000 "${{ github.workspace }}/gitleaks-report.json"
+        else
+          echo "No findings"
+        fi
 
     - name: Install deps
       shell: bash
