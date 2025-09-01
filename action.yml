@@ -1,5 +1,5 @@
 name: "AI Secure Code Review"
-description: "Automated AppSec code review on PR changes using a ChatGPT-compatible API"
+description: "Run a 2-minute AppSec code review on changed PR hunks using a ChatGPT-compatible API, with GitLeaks secret scanning."
 author: "DevSecOps-AppSec"
 branding:
   icon: "shield"
@@ -40,7 +40,7 @@ inputs:
   openai_base_url:
     description: "Optional: alternate base URL (e.g., OpenRouter)"
     required: false
-    default: "https://api.openai.com/v1"
+    default: ""
   openai_org:
     description: "Optional: OpenAI org id header"
     required: false
@@ -53,21 +53,22 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: 20
-        
+
     - name: Run GitLeaks secret scan
       uses: gitleaks/gitleaks-action@v2
       with:
-        args: detect --no-git --source . --report-format json --report-path gitleaks-report.json
+        args: detect --no-git --source ${{ github.workspace }} --report-format json --report-path ${{ github.workspace }}/gitleaks-report.json
       continue-on-error: true
 
-    - name: Show GitLeaks findings
+    - name: Show GitLeaks findings (optional)
       if: always()
-      run: cat gitleaks-report.json || echo "No gitleaks-report.json"
+      run: |
+        test -f "${{ github.workspace }}/gitleaks-report.json" && head -c 20000 "${{ github.workspace }}/gitleaks-report.json" || echo "No findings"
 
     - name: Install deps
       shell: bash
       working-directory: ${{ github.action_path }}
-      run: npm ci || npm i
+      run: npm ci --ignore-scripts --no-audit --fund=false || npm i
 
     - name: Run secure review
       shell: bash
