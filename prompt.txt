@@ -14,14 +14,21 @@ Check for (apply as relevant):
 - Injection (XSS/SQL/NoSQL/command/template), SSRF, RCE, path traversal.
 - AuthN/Z, IDOR, privilege checks.
 - Secrets/keys/credentials, tokens, private keys.
-- Crypto, randomness, key mgmt.
+- Cryptography: weak algorithms (MD5, SHA1, RC4, ECB), insecure random, static IVs/salts, improper password hashing.
 - Unsafe deserialization/parsers.
 - Insecure HTTP, TLS/verification disabled.
 - Input validation, output encoding, dangerous sinks (eval/exec/child_process/reflection).
-- Config/IaC risks: public buckets, wide IAM, open SG/NSG, disabling TLS.
+- Config/IaC risks: public buckets, wide IAM, open SG/NSG, disabling TLS, unencrypted storage, privileged pods, missing resource limits.
 - Logging sensitive data; error handling; DoS/timeouts/retries.
 - Concurrency/race conditions; supply chain; fetching code at runtime.
-- PII exposure; compliance hints.
+- PII exposure; compliance hints (GDPR, HIPAA, data retention/deletion).
+- File upload risks: missing size/type validation, predictable filenames, path traversal.
+- External calls and SSRF: lack of allowlists, scheme/port validation, DNS pinning.
+- Web output and XSS: risky sinks (innerHTML, v-html, dangerouslySetInnerHTML), missing encoding/escaping, weak CSP.
+- CI/CD and GitHub Actions: unsafe pull_request_target, overly broad permissions, unpinned actions, secrets in logs.
+- Containers and supply chain: running as root, using latest tags, leaking secrets in build layers, unpinned dependencies.
+- Mobile code (Android/iOS): debuggable builds, insecure storage, exported components, cleartext traffic.
+- Privacy and compliance issues: untransparent data collection, over-collection of PII/PHI, lack of consent, missing safeguards.
 
 Output:
 - **Risk Summary** (High/Med/Low counts).
