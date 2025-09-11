@@ -14,7 +14,7 @@ const {
   MAX_FILES = "30",
   MAX_LINES = "1200",
   LINE_TRIM_PER_FILE = "300",
-  RISKY_EXTS = "js,ts,tsx,jsx,py,go,rb,php,java,kt,cs,rs,swift,c,cc,cpp,h,sql,sh,ps1,yml,yaml,json,html,htm,css,scss,vue,mdx",
+  RISKY_EXTS = "js,ts,tsx,jsx,py,go,rb,php,java,kt,cs,rs,swift,c,cc,cpp,h,sql,sh,ps1,yml,yaml,json,html,htm,css,scss,vue,mdx,tf,tfvars,hcl",
   OPENAI_BASE_URL = "https://api.openai.com/v1",
   OPENAI_ORG = ""
 } = process.env;
