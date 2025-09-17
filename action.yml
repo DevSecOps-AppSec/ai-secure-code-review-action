@@ -16,7 +16,7 @@ inputs:
   max_tokens:
     description: "Max output tokens"
     required: false
-    default: "1000"
+    default: "1200"
   time_budget_seconds:
     description: "Time budget for analysis"
     required: false
